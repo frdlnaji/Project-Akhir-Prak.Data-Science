@@ -1,0 +1,323 @@
+---
+title: "Project"
+author: "Elvira Reza Dewanti 123190118"
+date: "2022-11-19"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+# Project Praktikum Data Science
+
+## Import Library
+
+```{r import-library}
+library(caret)
+library(dplyr)
+library(DT)
+library(e1071)
+library(ggplot2)
+library(here)
+library(plotly)
+library(rtweet)
+library(sass)
+library(shiny)
+library(syuzhet)
+library(tidyverse)
+library(tm)
+library(twitteR)
+library(vroom)
+```
+
+## Auth Twitter API and Scraping Twitter Data
+
+```{r auth-api}
+api_key <- "lC7TVLBfcLMJSQ0GHxRyK0keN"
+api_secret <- "AtTpNTNglSm1D34JWIVUY7p4zetj1XwA2z08tRtImN9D4pkek0"
+access_token <- "1321736178224164865-NWywFnXoDhN615uXNQ6dWxu2LwZGus"
+access_secret <- "4tLSwbfEDDVk5eP7EsiO4LHxidluRbNBSw2boKsZSn5PK"
+setup_twitter_oauth(api_key, api_secret, access_token, access_secret)
+```
+
+```{r scraping-data}
+verstappen <- searchTwitter("max+verstappen -filter:retweets", n = 1000, retryOnRateLimit = 10e5, lang = "en")
+saveRDS(verstappen, file = "Max Verstappen.rds")
+
+perez <- searchTwitter("sergio+perez -filter:retweets", n = 1000, retryOnRateLimit = 10e5, lang = "en")
+saveRDS(perez, file = "Sergio Perez.rds")
+
+mazepin <- searchTwitter("nikita+mazepin -filter:retweets", n = 1000, retryOnRateLimit = 10e5, lang = "en")
+saveRDS(mazepin, file = "Nikita Mazepin.rds")
+
+norris <- searchTwitter("lando+norris -filter:retweets", n = 1000, retryOnRateLimit = 10e5, lang = "en")
+saveRDS(norris, file = "Lando Norris.rds")
+
+gasly <- searchTwitter("pierre+gasly -filter:retweets", n = 1000, retryOnRateLimit = 10e5, lang = "en")
+saveRDS(gasly, file = "Pierre Gasly.rds")
+```
+
+## Data Cleaning
+
+```{r data-cleaning}
+cleaning <- function(x) {
+  twt <- readRDS(sprintf("%s.rds", x))
+  data_twt <- twListToDF(twt)
+  
+  twt_text <- data_twt$text
+  twt_text_c <- Corpus(VectorSource(twt_text))
+  
+  removeURL <- function(removeURL) gsub("http[^[:space:]]*", "", removeURL)
+  removeEmoticon <- function(removeEmoticon) gsub("[^\x01-\x7F]", "", removeEmoticon)
+  setwd("D:/Kuliah/Semester 7/Prak. Data Science/Project")
+  stopwords <- readLines("stopwords.txt")
+  
+  tweet_clean <- tm_map(twt_text_c, removePunctuation)
+  tweet_clean <- tm_map(tweet_clean, content_transformer(tolower))
+  tweet_clean <- tm_map(tweet_clean, removeNumbers)
+  tweet_clean <- tm_map(tweet_clean, stripWhitespace)
+  tweet_clean <- tm_map(tweet_clean, removeURL)
+  tweet_clean <- tm_map(tweet_clean, removeEmoticon)
+  tweet_clean <- tm_map(tweet_clean, removeWords, stopwords)
+  
+  data.frame(text = unlist(sapply(tweet_clean, `[`)), stringsAsFactors=F)
+}
+
+verstappen_clean <- cleaning("Max Verstappen")
+write.csv(verstappen_clean, file = "Max Verstappen Clean.csv")
+
+perez_clean <- cleaning("Sergio Perez")
+write.csv(perez_clean, file = "Sergio Perez Clean.csv")
+
+mazepin_clean <- cleaning("Nikita Mazepin")
+write.csv(mazepin_clean, file = "Nikita Mazepin Clean.csv")
+
+norris_clean <- cleaning("Lando Norris")
+write.csv(norris_clean, file = "Lando Norris Clean.csv")
+
+gasly_clean <- cleaning("Pierre Gasly")
+write.csv(gasly_clean, file = "Pierre Gasly Clean.csv")
+```
+
+## Naive Bayes Method
+
+```{r pnn-sentiment-table}
+pnn_st <- function(x) {
+  sentiment <- get_nrc_sentiment(x, language = "english")
+  
+  sentiment_class <- data.frame(negative = sentiment$negative, positive = sentiment$positive)
+  pnn <- mutate(sentiment_class, text_sentiment = 
+                       ifelse((sentiment_class$negative != sentiment_class$positive),
+                                                              ifelse(sentiment_class$negative!=0,
+                                                              "negative",
+                                                              "positive"),
+                                                          "neutral"))
+  data.frame(text = x, sentiment = pnn$text_sentiment)
+}  
+
+verstappen_pnn_st <- pnn_st(verstappen_clean$text)
+perez_pnn_st <- pnn_st(perez_clean$text)
+mazepin_pnn_st <- pnn_st(mazepin_clean$text)
+norris_pnn_st <- pnn_st(norris_clean$text)
+gasly_pnn_st <- pnn_st(gasly_clean$text)
+```
+
+```{r pnn-sentiment-plot}
+pnn_sp <- function(x, y) {
+  sentiment <- data.frame(positive = ifelse(y == "positive", 1, 0), negative = ifelse(y == "negative", 1, 0), neutral = ifelse(y == "neutral", 1, 0))
+  
+  par(mar = rep(3,4))
+  barplot(
+    colSums(sentiment),
+    col = rainbow(3),
+    ylab = "count",
+    main = sprintf("Positive-Negative-Neutral Sentiment Analysis of %s", x)
+  )
+  sentiment
+}  
+
+verstappen_pnn_sp <- pnn_sp("Max Verstappen", verstappen_pnn_st$sentiment)
+perez_pnn_sp <- pnn_sp("Sergio Perez", perez_pnn_st$sentiment)
+mazepin_pnn_sp <- pnn_sp("Nikita Mazepin", mazepin_pnn_st$sentiment)
+norris_pnn_sp <- pnn_sp("Lando Norris", norris_pnn_st$sentiment)
+gasly_pnn_sp <- pnn_sp("Pierre Gasly", gasly_pnn_st$sentiment)
+```
+
+```{r nrc-sentiment-table}
+nrc_st <- function(text) {
+  sentiment <- get_nrc_sentiment(text, language = "english")
+  
+  cbind(text, sentiment)
+}
+
+verstappen_nrc_st <- nrc_st(verstappen_clean$text)
+perez_nrc_st <- nrc_st(perez_clean$text)
+mazepin_nrc_st <- nrc_st(mazepin_clean$text)
+norris_nrc_st <- nrc_st(norris_clean$text)
+gasly_nrc_st <- nrc_st(gasly_clean$text)
+```
+
+```{r nrc-sentiment-plot}
+nrc_sp <- function(x, y) {
+  sentiment <- get_nrc_sentiment(y, language = "english")
+  
+  par(mar = rep(3,4))
+  barplot(
+    colSums(sentiment),
+    col = rainbow(10),
+    ylab = "count",
+    main = sprintf("NRC Sentiment Analysis of %s", x)
+  )
+  sentiment
+}  
+
+verstappen_nrc_sp <- nrc_sp("Max Verstappen", verstappen_clean$text)
+perez_nrc_sp <- nrc_sp("Sergio Perez", perez_clean$text)
+mazepin_nrc_sp <- nrc_sp("Nikita Mazepin", mazepin_clean$text)
+norris_nrc_sp <- nrc_sp("Lando Norris", norris_clean$text)
+gasly_nrc_sp <- nrc_sp("Pierre Gasly", gasly_clean$text)
+```
+
+## Create an App
+
+```{r ui}
+option <- list("Max Verstappen", "Sergio Perez", "Nikita Mazepin","Lando Norris", "Pierre Gasly")
+ui <- fluidPage(
+  title = "Project Data Science",
+  headerPanel("Sentiment Analysis of F1 Racer"),
+  sidebarPanel(
+    selectInput(
+      inputId = "racer",
+      label = "Choose a racer name:",
+      choices = option
+    )
+  ),
+  mainPanel(
+     tabsetPanel(
+       type = "tabs",
+       tabPanel("Data Twitter", DT::dataTableOutput("data")),
+       tabPanel("PNN Sentiment Analysis", DT::dataTableOutput("sentiment_pnn")),
+       tabPanel("PNN Scatterplot", plotOutput("scatterplot_pnn")),
+       tabPanel("NRC Sentiment Analysis", DT::dataTableOutput("sentiment_nrc")),
+       tabPanel("NRC Scatterplot", plotOutput("scatterplot_nrc"))
+     )
+  )
+)
+```
+
+```{r server}
+server <- function(input, output, session) {
+  output$data <- DT::renderDataTable({
+    if(input$racer == "Max Verstappen") DT::datatable(verstappen_clean, options = list(lengthChange = FALSE))
+    else if(input$racer == "Sergio Perez") DT::datatable(perez_clean, options = list(lengthChange = FALSE))
+    else if(input$racer == "Nikita Mazepin") DT::datatable(mazepin_clean, options = list(lengthChange = FALSE))
+    else if(input$racer == "Lando Norris") DT::datatable(norris_clean, options = list(lengthChange = FALSE))
+    else if(input$racer == "Pierre Gasly") DT::datatable(gasly_clean, options = list(lengthChange = FALSE))
+  })
+  
+  output$sentiment_pnn <- DT::renderDataTable({
+    if(input$racer == "Max Verstappen") DT::datatable(verstappen_pnn_st, options = list(lengthChange = FALSE))
+    else if(input$racer == "Sergio Perez") DT::datatable(perez_pnn_st, options = list(lengthChange = FALSE))
+    else if(input$racer == "Nikita Mazepin") DT::datatable(mazepin_pnn_st, options = list(lengthChange = FALSE))
+    else if(input$racer == "Lando Norris") DT::datatable(norris_pnn_st, options = list(lengthChange = FALSE))
+    else if(input$racer == "Pierre Gasly") DT::datatable(gasly_pnn_st, options = list(lengthChange = FALSE))
+  })
+  
+  output$scatterplot_pnn <- renderPlot({
+    if(input$racer == "Max Verstappen") {
+      barplot(
+        colSums(verstappen_pnn_sp),
+        col = rainbow(3),
+        ylab = "count",
+        main = sprintf("Positive-Negative-Neutral Sentiment Analysis of %s", input$racer)
+      )
+    }else if(input$racer == "Sergio Perez") {
+      barplot(
+        colSums(perez_pnn_sp),
+        col = rainbow(3),
+        ylab = "count",
+        main = sprintf("Positive-Negative-Neutral Sentiment Analysis of %s", input$racer)
+      )
+    }else if(input$racer == "Nikita Mazepin") {
+      barplot(
+        colSums(mazepin_pnn_sp),
+        col = rainbow(3),
+        ylab = "count",
+        main = sprintf("Positive-Negative-Neutral Sentiment Analysis of %s", input$racer)
+      )
+    }else if(input$racer == "Lando Norris") {
+      barplot(
+        colSums(norris_pnn_sp),
+        col = rainbow(3),
+        ylab = "count",
+        main = sprintf("Positive-Negative-Neutral Sentiment Analysis of %s", input$racer)
+      )
+    }else if(input$racer == "Pierre Gasly") {
+      barplot(
+        colSums(gasly_pnn_sp),
+        col = rainbow(3),
+        ylab = "count",
+        main = sprintf("Positive-Negative-Neutral Sentiment Analysis of %s", input$racer)
+      )
+    }
+  })
+  
+  output$sentiment_nrc <- DT::renderDataTable({
+    if(input$racer == "Max Verstappen") DT::datatable(verstappen_nrc_st, options = list(lengthChange = FALSE))
+    else if(input$racer == "Sergio Perez") DT::datatable(perez_nrc_st, options = list(lengthChange = FALSE))
+    else if(input$racer == "Nikita Mazepin") DT::datatable(mazepin_nrc_st, options = list(lengthChange = FALSE))
+    else if(input$racer == "Lando Norris") DT::datatable(norris_nrc_st, options = list(lengthChange = FALSE))
+    else if(input$racer == "Pierre Gasly") DT::datatable(gasly_nrc_st, options = list(lengthChange = FALSE))
+  })
+  
+  output$scatterplot_nrc <- renderPlot({
+    if(input$racer == "Max Verstappen") {
+      barplot(
+        colSums(verstappen_nrc_sp),
+        col = rainbow(10),
+        ylab = "count",
+        main = sprintf("NRC Sentiment Analysis of %s", input$racer)
+      )
+    }else if(input$racer == "Sergio Perez") {
+      barplot(
+        colSums(perez_nrc_sp),
+        col = rainbow(10),
+        ylab = "count",
+        main = sprintf("NRC Sentiment Analysis of %s", input$racer)
+      )
+    }else if(input$racer == "Nikita Mazepin") {
+      barplot(
+        colSums(mazepin_nrc_sp),
+        col = rainbow(10),
+        ylab = "count",
+        main = sprintf("NRC Sentiment Analysis of %s", input$racer)
+      )
+    }else if(input$racer == "Lando Norris") {
+      barplot(
+        colSums(norris_nrc_sp),
+        col = rainbow(10),
+        ylab = "count",
+        main = sprintf("NRC Sentiment Analysis of %s", input$racer)
+      )
+    }else if(input$racer == "Pierre Gasly") {
+      barplot(
+        colSums(gasly_nrc_sp),
+        col = rainbow(10),
+        ylab = "count",
+        main = sprintf("NRC Sentiment Analysis of %s", input$racer)
+      )
+    }
+  })
+}
+```
+
+```{r run-app}
+shinyApp(ui, server)
+```
