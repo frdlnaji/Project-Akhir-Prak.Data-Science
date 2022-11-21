@@ -35,6 +35,7 @@ library(tidyverse)
 library(tm)
 library(twitteR)
 library(vroom)
+library(wordcloud)
 ```
 
 ## Auth Twitter API and Scraping Twitter Data
@@ -76,7 +77,7 @@ cleaning <- function(x) {
   
   removeURL <- function(removeURL) gsub("http[^[:space:]]*", "", removeURL)
   removeEmoticon <- function(removeEmoticon) gsub("[^\x01-\x7F]", "", removeEmoticon)
-  setwd("D:/Kuliah/Semester 7/Prak. Data Science/Project")
+  setwd("D:/KULIAH NGAB/SEMESTER 5/Prak.DS/Project Akhir/Project-Praktikum-Data-Science-D-main")
   stopwords <- readLines("stopwords.txt")
   
   tweet_clean <- tm_map(twt_text_c, removePunctuation)
@@ -127,7 +128,20 @@ perez_pnn_st <- pnn_st(perez_clean$text)
 mazepin_pnn_st <- pnn_st(mazepin_clean$text)
 norris_pnn_st <- pnn_st(norris_clean$text)
 gasly_pnn_st <- pnn_st(gasly_clean$text)
+
+
 ```
+
+##Wordcloud
+```{r}
+
+
+
+
+```
+
+
+
 
 ```{r pnn-sentiment-plot}
 pnn_sp <- function(x, y) {
@@ -185,6 +199,9 @@ norris_nrc_sp <- nrc_sp("Lando Norris", norris_clean$text)
 gasly_nrc_sp <- nrc_sp("Pierre Gasly", gasly_clean$text)
 ```
 
+
+
+
 ## Create an App
 
 ```{r ui}
@@ -196,7 +213,8 @@ ui <- fluidPage(
     selectInput(
       inputId = "racer",
       label = "Choose a racer name:",
-      choices = option
+      choices = option,
+     
     )
   ),
   mainPanel(
@@ -206,7 +224,8 @@ ui <- fluidPage(
        tabPanel("PNN Sentiment Analysis", DT::dataTableOutput("sentiment_pnn")),
        tabPanel("PNN Scatterplot", plotOutput("scatterplot_pnn")),
        tabPanel("NRC Sentiment Analysis", DT::dataTableOutput("sentiment_nrc")),
-       tabPanel("NRC Scatterplot", plotOutput("scatterplot_nrc"))
+       tabPanel("NRC Scatterplot", plotOutput("scatterplot_nrc")),
+       tabPanel("Wordcloud Plot", plotOutput("wordcloud"))
      )
   )
 )
@@ -214,12 +233,26 @@ ui <- fluidPage(
 
 ```{r server}
 server <- function(input, output, session) {
+  
+  output$wordcloud <- renderPlot({
+    pallete <- brewer.pal(n = 9, "Paired")
+    if(input$racer == "Max Verstappen") wordcloud(verstappen_pnn_st, min.freq = 5, colors = pallete, random.order = FALSE)
+    else if(input$racer == "Sergio Perez") wordcloud(perez_pnn_st, min.freq = 5, colors = pallete)
+    else if(input$racer == "Nikita Mazepin") wordcloud(mazepin_pnn_st, min.freq = 5, colors = pallete)
+    else if(input$racer == "Lando Norris") wordcloud(norris_pnn_st, min.freq = 5, colors = pallete)
+    else if(input$racer == "Pierre Gasly") wordcloud(gasly_pnn_st, min.freq = 5, colors = pallete)
+    
+  })
+ 
   output$data <- DT::renderDataTable({
-    if(input$racer == "Max Verstappen") DT::datatable(verstappen_clean, options = list(lengthChange = FALSE))
+    
+    if(input$racer == "Max Verstappen" ) DT::datatable(verstappen_clean, options = list(lengthChange = FALSE))
     else if(input$racer == "Sergio Perez") DT::datatable(perez_clean, options = list(lengthChange = FALSE))
     else if(input$racer == "Nikita Mazepin") DT::datatable(mazepin_clean, options = list(lengthChange = FALSE))
     else if(input$racer == "Lando Norris") DT::datatable(norris_clean, options = list(lengthChange = FALSE))
     else if(input$racer == "Pierre Gasly") DT::datatable(gasly_clean, options = list(lengthChange = FALSE))
+    
+    
   })
   
   output$sentiment_pnn <- DT::renderDataTable({
@@ -231,6 +264,7 @@ server <- function(input, output, session) {
   })
   
   output$scatterplot_pnn <- renderPlot({
+    
     if(input$racer == "Max Verstappen") {
       barplot(
         colSums(verstappen_pnn_sp),
@@ -268,6 +302,8 @@ server <- function(input, output, session) {
       )
     }
   })
+ 
+    
   
   output$sentiment_nrc <- DT::renderDataTable({
     if(input$racer == "Max Verstappen") DT::datatable(verstappen_nrc_st, options = list(lengthChange = FALSE))
@@ -315,6 +351,7 @@ server <- function(input, output, session) {
       )
     }
   })
+ 
 }
 ```
 
